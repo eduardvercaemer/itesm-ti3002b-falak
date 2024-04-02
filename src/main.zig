@@ -100,7 +100,7 @@ pub fn main() !void {
             if (current == '#') {
                 std.debug.print("running single line comment\n", .{});
                 file_runner = file_offset + 1;
-                try runUntil(hasNewline, true);
+                try runUntil(hasNewline, false, true);
                 try addToken(.{ .comment = file[file_offset..file_runner] });
                 file_offset = file_runner - 1;
                 continue;
@@ -110,9 +110,17 @@ pub fn main() !void {
                 std.debug.print("running multi line comment\n", .{});
                 file_runner = file_offset + 1;
                 try expect('#');
-                try runUntil(hasPound, false);
+                try runUntil(hasPound, false, false);
                 try expect('>');
                 try addToken(.{ .comment = file[file_offset..file_runner] });
+                file_offset = file_runner - 1;
+                continue;
+            }
+
+            if (isSymbolStart(current)) {
+                std.debug.print("running symbol\n", .{});
+                file_runner = file_offset + 1;
+                try runUntil(hasSymbolChar, true, true);
                 file_offset = file_runner - 1;
                 continue;
             }
@@ -121,8 +129,6 @@ pub fn main() !void {
             return error.UnexpectedSymbol;
         }
     }
-
-    std.debug.print("tokens:\n{any}", .{tokens});
 }
 
 fn addToken(value: anytype) !void {
@@ -135,10 +141,10 @@ fn expect(c: u8) !void {
     file_runner += 1;
 }
 
-fn runUntil(cb: *const fn () bool, allow_eof: bool) !void {
+fn runUntil(cb: *const fn () bool, negate: bool, allow_eof: bool) !void {
     while (file_runner < file_size) : (file_runner += 1) {
         if (file[file_runner] == '\n') file_line += 1;
-        if (cb()) {
+        if (cb() != negate) {
             file_runner += 1;
             return;
         }
@@ -154,9 +160,38 @@ fn hasNewline() bool {
     return file[file_runner] == '\n';
 }
 
+fn hasSymbolChar() bool {
+    return isSymbolChar(file[file_runner]);
+}
+
 fn isWhitespace(c: u8) bool {
     return switch (c) {
         '\n', '\r', ' ', '\t' => true,
+        else => false,
+    };
+}
+
+fn isAlpha(c: u8) bool {
+    return switch (c) {
+        'a'...'z', 'A'...'Z' => true,
+        else => false,
+    };
+}
+
+fn isAlphanum(c: u8) bool {
+    return switch (c) {
+        'a'...'z', 'A'...'Z', '0'...'9' => true,
+        else => false,
+    };
+}
+
+fn isSymbolStart(c: u8) bool {
+    return isAlpha(c);
+}
+
+fn isSymbolChar(c: u8) bool {
+    return switch (c) {
+        'a'...'z', 'A'...'Z', '0'...'9', '_' => true,
         else => false,
     };
 }
