@@ -26,6 +26,21 @@ pub const Keyword = enum {
     k_while,
 };
 
+const keyword_map = .{
+    .{ "break", Keyword.k_break },
+    .{ "dec", Keyword.k_dec },
+    .{ "do", Keyword.k_do },
+    .{ "else", Keyword.k_else },
+    .{ "elseif", Keyword.k_elseif },
+    .{ "false", Keyword.k_false },
+    .{ "if", Keyword.k_if },
+    .{ "inc", Keyword.k_inc },
+    .{ "return", Keyword.k_return },
+    .{ "true", Keyword.k_true },
+    .{ "var", Keyword.k_var },
+    .{ "while", Keyword.k_while },
+};
+
 pub const Operator = enum {
     o_comma,
     o_semi,
@@ -120,7 +135,12 @@ pub fn lexer(ctx: *Context) LexerError!void {
         if (isSymbolStart(lctx.current)) {
             // TODO: process keywords
             try runUntil(&lctx, hasSymbolChar, true, true, true, false);
-            try addToken(&lctx, .{ .symbol = ctx.file[lctx.offset..lctx.runner] });
+            const has_keyword = checkKeyword(&lctx);
+            if (has_keyword) |keyword| {
+                try addToken(&lctx, .{ .keyword = keyword });
+            } else {
+                try addToken(&lctx, .{ .symbol = ctx.file[lctx.offset..lctx.runner] });
+            }
             lctx.offset = lctx.runner - 1;
             continue;
         }
@@ -257,6 +277,31 @@ fn addToken(lctx: *LexerContext, value: anytype) !void {
         .value = value,
     };
     try lctx.ctx.tokens.append(token);
+}
+
+fn checkKeyword(lctx: *LexerContext) ?Keyword {
+    const symbol = lctx.ctx.file[lctx.offset..lctx.runner];
+    inline for (keyword_map) |map| {
+        const string: []const u8 = map[0];
+        const keyword: Keyword = map[1];
+
+        if (symbol.len == string.len) {
+            var i: u8 = 0;
+            var match = true;
+            while (i < symbol.len) : (i += 1) {
+                if (symbol[i] != string[i]) {
+                    match = true;
+                    break;
+                }
+            }
+
+            if (match) {
+                return keyword;
+            }
+        }
+    }
+
+    return null;
 }
 
 fn peek(lctx: *LexerContext, c: u8) bool {

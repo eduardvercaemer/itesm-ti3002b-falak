@@ -28,13 +28,13 @@ pub fn main() !void {
             .comment => std.debug.print("{d} comment: {s}\n", .{ item.line, item.repr }),
             .symbol => std.debug.print("{d} symbol: {s}\n", .{ item.line, item.repr }),
             .operator => |op| std.debug.print("{d} op: {any}\n", .{ item.line, op }),
+            .keyword => |kw| std.debug.print("{d} keyword: {any}\n", .{ item.line, kw }),
             .literal => |lit| switch (lit) {
                 .string => std.debug.print("{d} string literal: {s}\n", .{ item.line, item.repr }),
                 .integer => std.debug.print("{d} integer literal: {s}\n", .{ item.line, item.repr }),
                 .character => std.debug.print("{d} character literal: {s}\n", .{ item.line, item.repr }),
                 else => {},
             },
-            else => {},
         };
     }
 
