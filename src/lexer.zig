@@ -4,6 +4,7 @@ const Context = @import("context.zig").Context;
 pub const LexerError = error{
     UnexpectedEndOfFile,
     UnexpectedSymbol,
+    InvalidCharacterLiteral,
     OutOfMemory,
     OverFlow,
 };
@@ -200,6 +201,16 @@ pub fn lexer(ctx: *Context) LexerError!void {
                 lctx.offset = lctx.runner - 1;
                 continue;
             },
+            '\'' => {
+                try runUntil(&lctx, hasSingleQuote, false, false, true);
+                if (lctx.runner - lctx.offset != 3) {
+                    // TODO: escapes and multibyte chars
+                    return error.InvalidCharacterLiteral;
+                }
+                try addToken(&lctx, .{ .literal = .{ .character = ctx.file[lctx.offset + 1] } });
+                lctx.offset = lctx.runner - 1;
+                continue;
+            },
             '0'...'9' => {
                 try runUntil(&lctx, hasDigit, true, true, false);
                 try addToken(&lctx, .{ .literal = .{ .integer = try parseI32(ctx.file[lctx.offset..lctx.runner]) } });
@@ -256,6 +267,10 @@ fn hasPound(lctx: *LexerContext) bool {
 
 fn hasDoubleQuote(lctx: *LexerContext) bool {
     return lctx.ctx.file[lctx.runner] == '"';
+}
+
+fn hasSingleQuote(lctx: *LexerContext) bool {
+    return lctx.ctx.file[lctx.runner] == '\'';
 }
 
 fn hasNewline(lctx: *LexerContext) bool {

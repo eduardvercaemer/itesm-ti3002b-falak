@@ -31,6 +31,7 @@ pub fn main() !void {
             .literal => |lit| switch (lit) {
                 .string => |string| std.debug.print("{d} string literal: {s}\n", .{ item.line, string }),
                 .integer => |int| std.debug.print("{d} integer literal: {d}\n", .{ item.line, int }),
+                .character => |char| std.debug.print("{d} character literal: {c}\n", .{ item.line, char }),
                 else => {},
             },
             else => {},
