@@ -77,5 +77,52 @@ pub fn main() !void {
     }
 
     const file = try std.fs.cwd().readFileAlloc(allocator, args[1], MAX_FILE_SIZE);
-    _ = file;
+    var tokens = try std.ArrayList(Token).init(allocator);
+
+    {
+        // LEXER
+        const size = file.len;
+        var line: u32 = 1;
+        var off: usize = 0;
+
+        while (off < size) : (off += 1) {
+            const cur = file[off];
+
+            if (cur.isNewline()) line += 1;
+            if (cur.isWhitespace()) continue;
+
+            if (cur == '#') {
+                var end: usize = off + 1;
+
+                while (end < size) : (end += 1) {
+                    if (file[end] == '\n') break;
+                }
+
+                try tokens.append(Token{ .start = off, .end = end, .line = line, .value = .{ .comment = file[off..end] } });
+            }
+
+            if (cur == '<') {
+                var end: usize = off + 1;
+
+                if (!(end < size)) {
+                    return error.UnexpectedEndOfFile;
+                }
+                if (file[end] != '#') {
+                    return error.UnexpectedSymbol;
+                }
+                end += 1;
+            }
+        }
+    }
+}
+
+fn isNewline(c: u8) bool {
+    return c == '\n';
+}
+
+fn isWhitespace(c: u8) bool {
+    return switch (c) {
+        '\n', '\r', ' ', '\t' => true,
+        else => false,
+    };
 }
