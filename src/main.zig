@@ -88,6 +88,14 @@ pub fn main() !void {
     file = try std.fs.cwd().readFileAlloc(allocator, args[1], MAX_FILE_SIZE);
     file_size = file.len;
     tokens = std.ArrayList(Token).init(allocator);
+    errdefer {
+        for (tokens.items) |item| switch (item.value) {
+            .comment => |comment| std.debug.print("comment: {s}\n", .{comment}),
+            .symbol => |symbol| std.debug.print("symbol: {s}\n", .{symbol}),
+            .operator => |op| std.debug.print("op: {any}\n", .{op}),
+            else => {},
+        };
+    }
 
     {
         // LEXER
@@ -121,9 +129,44 @@ pub fn main() !void {
                 std.debug.print("running symbol\n", .{});
                 file_runner = file_offset + 1;
                 try runUntil(hasSymbolChar, true, true);
+                try addToken(.{ .symbol = file[file_offset..file_runner] });
                 file_offset = file_runner - 1;
                 continue;
             }
+
+            const simpleOp = switch (current) {
+                ',' => Operator.o_comma,
+                ';' => Operator.o_semi,
+                '(' => Operator.o_oparen,
+                ')' => Operator.o_cparen,
+                '{' => Operator.o_ocurly,
+                '}' => Operator.o_ccurly,
+                '[' => Operator.o_obrack,
+                ']' => Operator.o_cbrack,
+                '^' => Operator.o_xor,
+                '+' => Operator.o_plus,
+                '-' => Operator.o_minus,
+                '*' => Operator.o_mul,
+                '/' => Operator.o_div,
+                '%' => Operator.o_mod,
+                else => null,
+            };
+            if (simpleOp) |operator| {
+                file_runner = file_offset + 1;
+                try addToken(.{ .operator = operator });
+                continue;
+            }
+
+            // '=' => null,
+            // '!' => null,
+            // '<' => null,
+            // '<=' => null,
+            // '>' => null,
+            // '>=' => null,
+            // '==' => null,
+            // '!=' => null,
+            // '&&' => null,
+            // '||' => null,
 
             std.debug.print("no handler\n", .{});
             return error.UnexpectedSymbol;
@@ -145,7 +188,7 @@ fn runUntil(cb: *const fn () bool, negate: bool, allow_eof: bool) !void {
     while (file_runner < file_size) : (file_runner += 1) {
         if (file[file_runner] == '\n') file_line += 1;
         if (cb() != negate) {
-            file_runner += 1;
+            if (!negate) file_runner += 1;
             return;
         }
     }
