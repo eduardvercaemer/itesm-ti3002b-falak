@@ -5,6 +5,7 @@ pub const LexerError = error{
     UnexpectedEndOfFile,
     UnexpectedSymbol,
     OutOfMemory,
+    OverFlow,
 };
 
 pub const Keyword = enum {
@@ -199,9 +200,16 @@ pub fn lexer(ctx: *Context) LexerError!void {
                 lctx.offset = lctx.runner - 1;
                 continue;
             },
+            '0'...'9' => {
+                try runUntil(&lctx, hasDigit, true, true, false);
+                try addToken(&lctx, .{ .literal = .{ .integer = try parseI32(ctx.file[lctx.offset..lctx.runner]) } });
+                lctx.offset = lctx.runner - 1;
+                continue;
+            },
             else => {},
         }
 
+        std.debug.print("Unexpected Symbol '{c}'\n", .{lctx.current});
         return error.UnexpectedSymbol;
     }
 }
@@ -233,6 +241,13 @@ fn runUntil(lctx: *LexerContext, cb: *const fn (lctx: *LexerContext) bool, negat
     }
 
     if (!allow_eof) return error.UnexpectedEndOfFile;
+}
+
+fn hasDigit(lctx: *LexerContext) bool {
+    return switch (lctx.ctx.file[lctx.runner]) {
+        '0'...'9' => true,
+        else => false,
+    };
 }
 
 fn hasPound(lctx: *LexerContext) bool {
@@ -281,4 +296,23 @@ fn isSymbolChar(c: u8) bool {
         'a'...'z', 'A'...'Z', '0'...'9', '_' => true,
         else => false,
     };
+}
+
+pub fn parseI32(buf: []const u8) !i32 {
+    var x: i32 = 0;
+
+    for (buf) |c| {
+        const digit = c - '0';
+
+        // x *= radix
+        var ov = @mulWithOverflow(x, 10);
+        if (ov[1] != 0) return error.OverFlow;
+
+        // x += digit
+        ov = @addWithOverflow(ov[0], digit);
+        if (ov[1] != 0) return error.OverFlow;
+        x = ov[0];
+    }
+
+    return x;
 }

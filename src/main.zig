@@ -30,6 +30,7 @@ pub fn main() !void {
             .operator => |op| std.debug.print("{d} op: {any}\n", .{ item.line, op }),
             .literal => |lit| switch (lit) {
                 .string => |string| std.debug.print("{d} string literal: {s}\n", .{ item.line, string }),
+                .integer => |int| std.debug.print("{d} integer literal: {d}\n", .{ item.line, int }),
                 else => {},
             },
             else => {},
