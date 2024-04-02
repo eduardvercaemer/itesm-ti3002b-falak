@@ -4,6 +4,7 @@
 #>
 
 main() {
+ <= != == =
     prints("hello, world\n");;;
     return 42;;;
 }

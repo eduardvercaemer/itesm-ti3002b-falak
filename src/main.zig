@@ -101,25 +101,14 @@ pub fn main() !void {
         // LEXER
         while (file_offset < file_size) : (file_offset += 1) {
             current = file[file_offset];
+            file_runner = file_offset + 1;
 
             if (current == '\n') file_line += 1;
             if (isWhitespace(current)) continue;
 
             if (current == '#') {
                 std.debug.print("running single line comment\n", .{});
-                file_runner = file_offset + 1;
                 try runUntil(hasNewline, false, true);
-                try addToken(.{ .comment = file[file_offset..file_runner] });
-                file_offset = file_runner - 1;
-                continue;
-            }
-
-            if (current == '<') {
-                std.debug.print("running multi line comment\n", .{});
-                file_runner = file_offset + 1;
-                try expect('#');
-                try runUntil(hasPound, false, false);
-                try expect('>');
                 try addToken(.{ .comment = file[file_offset..file_runner] });
                 file_offset = file_runner - 1;
                 continue;
@@ -127,7 +116,6 @@ pub fn main() !void {
 
             if (isSymbolStart(current)) {
                 std.debug.print("running symbol\n", .{});
-                file_runner = file_offset + 1;
                 try runUntil(hasSymbolChar, true, true);
                 try addToken(.{ .symbol = file[file_offset..file_runner] });
                 file_offset = file_runner - 1;
@@ -152,21 +140,73 @@ pub fn main() !void {
                 else => null,
             };
             if (simpleOp) |operator| {
-                file_runner = file_offset + 1;
                 try addToken(.{ .operator = operator });
                 continue;
             }
 
-            // '=' => null,
-            // '!' => null,
-            // '<' => null,
-            // '<=' => null,
-            // '>' => null,
-            // '>=' => null,
-            // '==' => null,
-            // '!=' => null,
-            // '&&' => null,
-            // '||' => null,
+            switch (current) {
+                '=' => {
+                    if (peek('=')) {
+                        try expect('=');
+                        try addToken(.{ .operator = Operator.o_equal });
+                        file_offset = file_runner - 1;
+                    } else {
+                        try addToken(.{ .operator = Operator.o_assign });
+                    }
+                    continue;
+                },
+                '!' => {
+                    if (peek('=')) {
+                        try expect('=');
+                        try addToken(.{ .operator = Operator.o_nequal });
+                        file_offset = file_runner - 1;
+                    } else {
+                        try addToken(.{ .operator = Operator.o_not });
+                    }
+                    continue;
+                },
+                '<' => {
+                    std.debug.print("got <\n", .{});
+                    if (peek('=')) {
+                        try expect('=');
+                        try addToken(.{ .operator = Operator.o_ltequal });
+                        file_offset = file_runner - 1;
+                    } else if (peek('#')) {
+                        try expect('#');
+                        try runUntil(hasPound, false, false);
+                        try expect('>');
+                        try addToken(.{ .comment = file[file_offset..file_runner] });
+                        file_offset = file_runner - 1;
+                        continue;
+                    } else {
+                        try addToken(.{ .operator = Operator.o_lt });
+                    }
+                    continue;
+                },
+                '>' => {
+                    if (peek('=')) {
+                        try expect('=');
+                        try addToken(.{ .operator = Operator.o_gtequal });
+                        file_offset = file_runner - 1;
+                    } else {
+                        try addToken(.{ .operator = Operator.o_gt });
+                    }
+                    continue;
+                },
+                '&' => {
+                    try expect('&');
+                    try addToken(.{ .operator = Operator.o_and });
+                    file_offset = file_runner - 1;
+                    continue;
+                },
+                '|' => {
+                    try expect('|');
+                    try addToken(.{ .operator = Operator.o_pipes });
+                    file_offset = file_runner - 1;
+                    continue;
+                },
+                else => {},
+            }
 
             std.debug.print("no handler\n", .{});
             return error.UnexpectedSymbol;
@@ -176,6 +216,11 @@ pub fn main() !void {
 
 fn addToken(value: anytype) !void {
     try tokens.append(Token{ .start = file_offset, .end = file_runner, .line = file_line, .value = value });
+}
+
+fn peek(c: u8) bool {
+    if (!(file_runner < file_size)) return false;
+    return file[file_runner] == c;
 }
 
 fn expect(c: u8) !void {
