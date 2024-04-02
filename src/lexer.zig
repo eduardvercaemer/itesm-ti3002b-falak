@@ -1,10 +1,5 @@
 const std = @import("std");
-
-pub const Context = struct {
-    file: []const u8,
-    allocator: std.mem.Allocator,
-    tokens: std.ArrayList(Token),
-};
+const Context = @import("context.zig").Context;
 
 pub const LexerError = error{
     UnexpectedEndOfFile,

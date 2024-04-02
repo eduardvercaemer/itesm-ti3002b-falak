@@ -1,5 +1,6 @@
 const std = @import("std");
 const lexer = @import("lexer.zig");
+const Context = @import("context.zig").Context;
 
 const MAX_FILE_SIZE = 1_000_000;
 
@@ -16,7 +17,7 @@ pub fn main() !void {
 
     const file = try std.fs.cwd().readFileAlloc(allocator, args[1], MAX_FILE_SIZE);
 
-    var ctx = lexer.Context{
+    var ctx = Context{
         .file = file,
         .allocator = allocator,
         .tokens = std.ArrayList(lexer.Token).init(allocator),
