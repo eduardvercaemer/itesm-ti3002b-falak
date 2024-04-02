@@ -2,9 +2,11 @@ const std = @import("std");
 const Context = @import("context.zig").Context;
 
 pub const LexerError = error{
+    UnexpectedEndOfLine,
     UnexpectedEndOfFile,
     UnexpectedSymbol,
     InvalidCharacterLiteral,
+    InvalidEscapeSequence,
     OutOfMemory,
     OverFlow,
 };
@@ -63,13 +65,21 @@ pub const Token = struct {
     line: u32,
     start: usize,
     end: usize,
+    repr: []const u8,
     value: union(enum) {
         symbol: []const u8,
         keyword: Keyword,
         literal: Literal,
         operator: Operator,
-        comment: []const u8,
+        comment: void,
     },
+};
+
+const EscapeSequence = struct {
+    start: usize,
+    end: usize,
+    // TODO: unicode escapes ???
+    codepoint: u8,
 };
 
 const LexerContext = struct {
@@ -79,6 +89,7 @@ const LexerContext = struct {
     offset: usize,
     runner: usize,
     current: u8,
+    escape_sequences: std.ArrayList(EscapeSequence),
 };
 
 pub fn lexer(ctx: *Context) LexerError!void {
@@ -89,6 +100,7 @@ pub fn lexer(ctx: *Context) LexerError!void {
         .offset = 0,
         .runner = undefined,
         .current = undefined,
+        .escape_sequences = std.ArrayList(EscapeSequence).init(ctx.allocator),
     };
 
     while (lctx.offset < lctx.size) : (lctx.offset += 1) {
@@ -99,15 +111,15 @@ pub fn lexer(ctx: *Context) LexerError!void {
         if (isWhitespace(lctx.current)) continue;
 
         if (lctx.current == '#') {
-            try runUntil(&lctx, hasNewline, false, true, false);
-            try addToken(&lctx, .{ .comment = ctx.file[lctx.offset..lctx.runner] });
+            try runUntil(&lctx, hasNewline, false, true, true, false);
+            try addToken(&lctx, .{ .comment = {} });
             lctx.offset = lctx.runner - 1;
             continue;
         }
 
         if (isSymbolStart(lctx.current)) {
             // TODO: process keywords
-            try runUntil(&lctx, hasSymbolChar, true, true, false);
+            try runUntil(&lctx, hasSymbolChar, true, true, true, false);
             try addToken(&lctx, .{ .symbol = ctx.file[lctx.offset..lctx.runner] });
             lctx.offset = lctx.runner - 1;
             continue;
@@ -163,9 +175,9 @@ pub fn lexer(ctx: *Context) LexerError!void {
                     lctx.offset = lctx.runner - 1;
                 } else if (peek(&lctx, '#')) {
                     try expect(&lctx, '#');
-                    try runUntil(&lctx, hasPound, false, false, false);
+                    try runUntil(&lctx, hasPound, false, true, false, false);
                     try expect(&lctx, '>');
-                    try addToken(&lctx, .{ .comment = ctx.file[lctx.offset..lctx.runner] });
+                    try addToken(&lctx, .{ .comment = {} });
                     lctx.offset = lctx.runner - 1;
                     continue;
                 } else {
@@ -196,13 +208,24 @@ pub fn lexer(ctx: *Context) LexerError!void {
                 continue;
             },
             '"' => {
-                try runUntil(&lctx, hasDoubleQuote, false, false, true);
-                try addToken(&lctx, .{ .literal = .{ .string = ctx.file[lctx.offset..lctx.runner] } });
+                try runUntil(&lctx, hasDoubleQuote, false, false, false, true);
+                const raw = ctx.file[lctx.offset..lctx.runner];
+                var encoded = std.ArrayList(u8).init(ctx.allocator);
+                var remaining: usize = 1;
+                for (lctx.escape_sequences.items) |sequence| {
+                    try encoded.appendSlice(raw[remaining..sequence.start]);
+                    try encoded.append(sequence.codepoint);
+                    remaining = sequence.end;
+                }
+                if (remaining < raw.len - 1) {
+                    try encoded.appendSlice(raw[remaining .. raw.len - 1]);
+                }
+                try addToken(&lctx, .{ .literal = .{ .string = encoded.items } });
                 lctx.offset = lctx.runner - 1;
                 continue;
             },
             '\'' => {
-                try runUntil(&lctx, hasSingleQuote, false, false, true);
+                try runUntil(&lctx, hasSingleQuote, false, false, false, true);
                 if (lctx.runner - lctx.offset != 3) {
                     // TODO: escapes and multibyte chars
                     return error.InvalidCharacterLiteral;
@@ -212,7 +235,7 @@ pub fn lexer(ctx: *Context) LexerError!void {
                 continue;
             },
             '0'...'9' => {
-                try runUntil(&lctx, hasDigit, true, true, false);
+                try runUntil(&lctx, hasDigit, true, true, true, false);
                 try addToken(&lctx, .{ .literal = .{ .integer = try parseI32(ctx.file[lctx.offset..lctx.runner]) } });
                 lctx.offset = lctx.runner - 1;
                 continue;
@@ -226,7 +249,14 @@ pub fn lexer(ctx: *Context) LexerError!void {
 }
 
 fn addToken(lctx: *LexerContext, value: anytype) !void {
-    try lctx.ctx.tokens.append(Token{ .start = lctx.offset, .end = lctx.runner, .line = lctx.line, .value = value });
+    const token = Token{
+        .start = lctx.offset,
+        .end = lctx.runner,
+        .line = lctx.line,
+        .repr = lctx.ctx.file[lctx.offset..lctx.runner],
+        .value = value,
+    };
+    try lctx.ctx.tokens.append(token);
 }
 
 fn peek(lctx: *LexerContext, c: u8) bool {
@@ -240,12 +270,59 @@ fn expect(lctx: *LexerContext, c: u8) !void {
     lctx.runner += 1;
 }
 
-fn runUntil(lctx: *LexerContext, cb: *const fn (lctx: *LexerContext) bool, negate: bool, allow_eof: bool, apply_escapes: bool) !void {
-    // TODO: apply string literal escapes
-    _ = apply_escapes;
+fn runUntil(lctx: *LexerContext, cb: *const fn (lctx: *LexerContext) bool, negate: bool, allow_newline: bool, allow_eof: bool, apply_escapes: bool) !void {
+    const EscapeState = enum {
+        WontEscape,
+        Outside,
+        Inside,
+    };
+
+    if (apply_escapes) {
+        lctx.escape_sequences.clearRetainingCapacity();
+    }
+
+    var state: EscapeState = if (apply_escapes) .Outside else .WontEscape;
+
     while (lctx.runner < lctx.size) : (lctx.runner += 1) {
-        if (lctx.ctx.file[lctx.runner] == '\n') lctx.line += 1;
-        if (cb(lctx) != negate) {
+        const runner = lctx.ctx.file[lctx.runner];
+        if (runner == '\n') {
+            if (allow_newline) {
+                lctx.line += 1;
+            } else {
+                return error.UnexpectedEndOfLine;
+            }
+        }
+
+        switch (state) {
+            .WontEscape => {},
+            .Outside => if (runner == '\\') {
+                state = .Inside;
+            },
+            .Inside => {
+                switch (runner) {
+                    'n', 'r', 't', '\\', '\'', '\"' => |c| {
+                        try lctx.escape_sequences.append(.{
+                            .start = lctx.runner - lctx.offset - 1,
+                            .end = lctx.runner - lctx.offset + 1,
+                            .codepoint = switch (c) {
+                                'n' => '\n',
+                                'r' => '\r',
+                                't' => '\t',
+                                '\\' => '\\',
+                                '\'' => '\'',
+                                '\"' => '\"',
+                                else => unreachable,
+                            },
+                        });
+                        state = .Outside;
+                        continue;
+                    },
+                    else => return error.InvalidEscapeSequence,
+                }
+            },
+        }
+
+        if ((state != .Inside) and (cb(lctx) != negate)) {
             if (!negate) lctx.runner += 1;
             return;
         }
