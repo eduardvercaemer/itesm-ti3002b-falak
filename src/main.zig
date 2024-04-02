@@ -93,6 +93,10 @@ pub fn main() !void {
             .comment => |comment| std.debug.print("comment: {s}\n", .{comment}),
             .symbol => |symbol| std.debug.print("symbol: {s}\n", .{symbol}),
             .operator => |op| std.debug.print("op: {any}\n", .{op}),
+            .literal => |lit| switch (lit) {
+                .string => |string| std.debug.print("string literal: {s}\n", .{string}),
+                else => {},
+            },
             else => {},
         };
     }
@@ -108,7 +112,7 @@ pub fn main() !void {
 
             if (current == '#') {
                 std.debug.print("running single line comment\n", .{});
-                try runUntil(hasNewline, false, true);
+                try runUntil(hasNewline, false, true, false);
                 try addToken(.{ .comment = file[file_offset..file_runner] });
                 file_offset = file_runner - 1;
                 continue;
@@ -116,7 +120,7 @@ pub fn main() !void {
 
             if (isSymbolStart(current)) {
                 std.debug.print("running symbol\n", .{});
-                try runUntil(hasSymbolChar, true, true);
+                try runUntil(hasSymbolChar, true, true, false);
                 try addToken(.{ .symbol = file[file_offset..file_runner] });
                 file_offset = file_runner - 1;
                 continue;
@@ -173,7 +177,7 @@ pub fn main() !void {
                         file_offset = file_runner - 1;
                     } else if (peek('#')) {
                         try expect('#');
-                        try runUntil(hasPound, false, false);
+                        try runUntil(hasPound, false, false, false);
                         try expect('>');
                         try addToken(.{ .comment = file[file_offset..file_runner] });
                         file_offset = file_runner - 1;
@@ -205,6 +209,12 @@ pub fn main() !void {
                     file_offset = file_runner - 1;
                     continue;
                 },
+                '"' => {
+                    try runUntil(hasDoubleQuote, false, false, true);
+                    try addToken(.{ .literal = .{ .string = file[file_offset..file_runner] } });
+                    file_offset = file_runner - 1;
+                    continue;
+                },
                 else => {},
             }
 
@@ -229,7 +239,9 @@ fn expect(c: u8) !void {
     file_runner += 1;
 }
 
-fn runUntil(cb: *const fn () bool, negate: bool, allow_eof: bool) !void {
+fn runUntil(cb: *const fn () bool, negate: bool, allow_eof: bool, apply_escapes: bool) !void {
+    // TODO: apply string literal escapes
+    _ = apply_escapes;
     while (file_runner < file_size) : (file_runner += 1) {
         if (file[file_runner] == '\n') file_line += 1;
         if (cb() != negate) {
@@ -242,6 +254,10 @@ fn runUntil(cb: *const fn () bool, negate: bool, allow_eof: bool) !void {
 
 fn hasPound() bool {
     return file[file_runner] == '#';
+}
+
+fn hasDoubleQuote() bool {
+    return file[file_runner] == '"';
 }
 
 fn hasNewline() bool {
