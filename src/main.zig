@@ -65,6 +65,15 @@ const Token = struct {
     },
 };
 
+var file: []const u8 = undefined;
+var file_size: usize = undefined;
+var file_line: u32 = 1;
+var file_offset: usize = 0;
+var file_runner: usize = undefined;
+var current: u8 = undefined;
+
+var tokens: std.ArrayList(Token) = undefined;
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -76,48 +85,73 @@ pub fn main() !void {
         return error.BadArguments;
     }
 
-    const file = try std.fs.cwd().readFileAlloc(allocator, args[1], MAX_FILE_SIZE);
-    var tokens = try std.ArrayList(Token).init(allocator);
+    file = try std.fs.cwd().readFileAlloc(allocator, args[1], MAX_FILE_SIZE);
+    file_size = file.len;
+    tokens = std.ArrayList(Token).init(allocator);
 
     {
         // LEXER
-        const size = file.len;
-        var line: u32 = 1;
-        var off: usize = 0;
+        while (file_offset < file_size) : (file_offset += 1) {
+            current = file[file_offset];
 
-        while (off < size) : (off += 1) {
-            const cur = file[off];
+            if (current == '\n') file_line += 1;
+            if (isWhitespace(current)) continue;
 
-            if (cur.isNewline()) line += 1;
-            if (cur.isWhitespace()) continue;
-
-            if (cur == '#') {
-                var end: usize = off + 1;
-
-                while (end < size) : (end += 1) {
-                    if (file[end] == '\n') break;
-                }
-
-                try tokens.append(Token{ .start = off, .end = end, .line = line, .value = .{ .comment = file[off..end] } });
+            if (current == '#') {
+                std.debug.print("running single line comment\n", .{});
+                file_runner = file_offset + 1;
+                try runUntil(hasNewline, true);
+                try addToken(.{ .comment = file[file_offset..file_runner] });
+                file_offset = file_runner - 1;
+                continue;
             }
 
-            if (cur == '<') {
-                var end: usize = off + 1;
-
-                if (!(end < size)) {
-                    return error.UnexpectedEndOfFile;
-                }
-                if (file[end] != '#') {
-                    return error.UnexpectedSymbol;
-                }
-                end += 1;
+            if (current == '<') {
+                std.debug.print("running multi line comment\n", .{});
+                file_runner = file_offset + 1;
+                try expect('#');
+                try runUntil(hasPound, false);
+                try expect('>');
+                try addToken(.{ .comment = file[file_offset..file_runner] });
+                file_offset = file_runner - 1;
+                continue;
             }
+
+            std.debug.print("no handler\n", .{});
+            return error.UnexpectedSymbol;
         }
     }
+
+    std.debug.print("tokens:\n{any}", .{tokens});
 }
 
-fn isNewline(c: u8) bool {
-    return c == '\n';
+fn addToken(value: anytype) !void {
+    try tokens.append(Token{ .start = file_offset, .end = file_runner, .line = file_line, .value = value });
+}
+
+fn expect(c: u8) !void {
+    if (!(file_runner < file_size)) return error.UnexpectedEndOfFile;
+    if (file[file_runner] != c) return error.UnexpectedSymbol;
+    file_runner += 1;
+}
+
+fn runUntil(cb: *const fn () bool, allow_eof: bool) !void {
+    while (file_runner < file_size) : (file_runner += 1) {
+        if (file[file_runner] == '\n') file_line += 1;
+        if (cb()) {
+            file_runner += 1;
+            return;
+        }
+    }
+    if (!allow_eof) return error.UnexpectedEndOfFile;
+}
+
+fn hasPound() bool {
+    return file[file_runner] == '#';
+}
+
+fn hasNewline() bool {
+    return file[file_runner] == '\n';
 }
 
 fn isWhitespace(c: u8) bool {
