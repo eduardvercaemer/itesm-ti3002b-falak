@@ -31,11 +31,36 @@ const Token = union(enum) {
     comment: []const u8,
 };
 
+var file: []const u8 = undefined;
+var tokens: std.ArrayList(Token) = undefined;
+
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
     const allocator = arena.allocator();
-    const file = try std.fs.cwd().readFileAlloc(allocator, "README.md", MAX_FILE_SIZE);
-    std.debug.print("file: {s}\n", .{file});
+
+    const args = try std.process.argsAlloc(allocator);
+    if (args.len != 2) {
+        return error.BadArguments;
+    }
+
+    file = try std.fs.cwd().readFileAlloc(allocator, args[1], MAX_FILE_SIZE);
+    tokens = std.ArrayList(Token).init(allocator);
+
+    try read_tokens();
+}
+
+fn read_tokens() !void {
+    const S = struct {
+        var offset: usize = 0;
+        fn comment() void {}
+    };
+
+    while (S.offset < file.len) {
+        const at = file[S.offset];
+        switch (at) {
+            else => return error.MissingTokenHandler,
+        }
+    }
 }
