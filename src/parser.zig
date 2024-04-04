@@ -88,5 +88,5 @@ pub const Expr = union(enum) {
 };
 
 pub fn parser(ctx: *Context) ParserError!void {
-    _ = ctx;
+    ctx.program = std.ArrayList(Definition).init(ctx.allocator);
 }

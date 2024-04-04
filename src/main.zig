@@ -40,6 +40,13 @@ pub fn main() !void {
         };
     }
 
+    defer {
+        for (ctx.program.items) |def| switch (def) {
+            .function => std.debug.print("function definition\n", .{}),
+            .globals => std.debug.print("globals definition\n", .{}),
+        };
+    }
+
     try lexer.lexer(&ctx);
     try parser.parser(&ctx);
 }
