@@ -1,5 +1,6 @@
 const std = @import("std");
 const lexer = @import("lexer.zig");
+const parser = @import("parser.zig");
 const Context = @import("context.zig").Context;
 
 const MAX_FILE_SIZE = 1_000_000;
@@ -39,4 +40,5 @@ pub fn main() !void {
     }
 
     try lexer.lexer(&ctx);
+    try parser.parser(&ctx);
 }
