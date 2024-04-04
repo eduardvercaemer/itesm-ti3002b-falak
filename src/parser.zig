@@ -54,8 +54,8 @@ pub const Stmt = union(enum) {
 };
 
 pub const BinaryOp = struct {
-    left: Expr,
-    right: Expr,
+    left: *Expr,
+    right: *Expr,
 };
 
 pub const Expr = union(enum) {
@@ -74,7 +74,7 @@ pub const Expr = union(enum) {
     add: BinaryOp,
     mul: BinaryOp,
     unary: struct {
-        expr: Expr,
+        expr: *Expr,
         kind: enum {
             plus,
             neg,

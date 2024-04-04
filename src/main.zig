@@ -21,7 +21,8 @@ pub fn main() !void {
     var ctx = Context{
         .file = file,
         .allocator = allocator,
-        .tokens = std.ArrayList(lexer.Token).init(allocator),
+        .tokens = undefined,
+        .program = undefined,
     };
 
     defer {

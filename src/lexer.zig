@@ -108,6 +108,8 @@ const LexerContext = struct {
 };
 
 pub fn lexer(ctx: *Context) LexerError!void {
+    ctx.tokens = std.ArrayList(Token).init(ctx.allocator);
+
     var lctx = LexerContext{
         .ctx = ctx,
         .size = ctx.file.len,
