@@ -27,20 +27,20 @@ pub fn main() !void {
         .message = null,
     };
 
-    // defer {
-    //     for (ctx.tokens.items) |item| switch (item.value) {
-    //         .comment => std.debug.print("{d} comment: {s}\n", .{ item.line, item.repr }),
-    //         .symbol => std.debug.print("{d} symbol: {s}\n", .{ item.line, item.repr }),
-    //         .operator => |op| std.debug.print("{d} op: {any}\n", .{ item.line, op }),
-    //         .keyword => |kw| std.debug.print("{d} keyword: {any}\n", .{ item.line, kw }),
-    //         .literal => |lit| switch (lit) {
-    //             .string => std.debug.print("{d} string literal: {s}\n", .{ item.line, item.repr }),
-    //             .integer => std.debug.print("{d} integer literal: {s}\n", .{ item.line, item.repr }),
-    //             .character => std.debug.print("{d} character literal: {s}\n", .{ item.line, item.repr }),
-    //             else => {},
-    //         },
-    //     };
-    // }
+    defer {
+        for (ctx.tokens.items) |item| switch (item.value) {
+            .comment => std.debug.print("{d} comment: {s}\n", .{ item.line, item.repr }),
+            .symbol => std.debug.print("{d} symbol: {s}\n", .{ item.line, item.repr }),
+            .operator => |op| std.debug.print("{d} op: {any}\n", .{ item.line, op }),
+            .keyword => |kw| std.debug.print("{d} keyword: {any}\n", .{ item.line, kw }),
+            .literal => |lit| switch (lit) {
+                .string => std.debug.print("{d} string literal: {s}\n", .{ item.line, item.repr }),
+                .integer => std.debug.print("{d} integer literal: {s}\n", .{ item.line, item.repr }),
+                .character => std.debug.print("{d} character literal: {s}\n", .{ item.line, item.repr }),
+                else => {},
+            },
+        };
+    }
 
     // defer {
     //     for (ctx.program.items) |def| switch (def) {
@@ -55,5 +55,5 @@ pub fn main() !void {
     }
 
     try lexer.lexer(&ctx);
-    try parser.parser(&ctx);
+    // try parser.parser(&ctx);
 }
