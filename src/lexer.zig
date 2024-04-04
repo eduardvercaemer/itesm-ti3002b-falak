@@ -292,7 +292,7 @@ fn checkKeyword(lctx: *LexerContext) ?Keyword {
             var match = true;
             while (i < symbol.len) : (i += 1) {
                 if (symbol[i] != string[i]) {
-                    match = true;
+                    match = false;
                     break;
                 }
             }
